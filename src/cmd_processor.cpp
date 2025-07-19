@@ -1,66 +1,71 @@
-#include <Arduino.h>
 #include "cmd_processor.h"
 #include "wifi_manager.h"
 #include "ble_scanner.h"
 #include "tcp_client.h"
 #include "state_controller.h"
-#include "bluetooth_handler.h"
 #include "filter_storage.h"
 
-extern BluetoothSerial SerialBT;
-
-bool processBluetoothCommand(const String &input)
+void processCommand(String input)
 {
+    input.trim();
+    input.toLowerCase();
+
     if (input == "view")
     {
-        Serial.println("🔧 Received command: " + input);
+        Serial.println("🔧 Received command: view");
+        delay(200);
         setScanFlag();
-        SerialBT.println("🔍 Scanning for beacons...");
-        return true;
+        Serial.println("🕒 Scan scheduled. Will run shortly...");
+        // performBeaconScan();
     }
     else if (input.startsWith("filter "))
     {
         Serial.println("🔧 Received command: " + input);
         String mac = input.substring(7);
-        addFilter(String(mac.c_str()));
-        SerialBT.println("✅ Added to filter: " + mac);
-        return true;
+        delay(200);
+        addFilter(mac);
+        Serial.println("✅ Added to filter: " + mac);
     }
-    else if (input.startsWith("delete"))
+    else if (input.startsWith("delete "))
     {
         Serial.println("🔧 Received command: " + input);
         String mac = input.substring(7);
-        removeFilter(String(mac.c_str()));
-        SerialBT.println("🗑️ Removed from filter: " + mac);
-        return true;
+        delay(200);
+        removeFilter(mac);
+        Serial.println("🗑️ Removed from filter: " + mac);
     }
     else if (input == "send")
     {
-        Serial.println("🔧 Received command: " + input);
+        Serial.println("🔧 Received command: send");
+        delay(200);
         setSendFlag();
-        SerialBT.println("📤 Preparing to send data...");
+        Serial.println("📤 Preparing to send data...");
 
-        // 🔁 Trigger scan and send immediately
-        scanForBeacons(); // Reuse your existing scanner
+        scanForBeacons(); // Trigger scan
         const auto &beacons = getCollectedBeacons();
-        if (beacons.empty()){
-            SerialBT.println("❌ No beacons found to send.");
+        if (beacons.empty())
+        {
+            Serial.println("❌ No beacons found to send.");
         }
-        else{
+        else
+        {
             sendBeaconDataViaTCP(beacons);
-            SerialBT.println("✅ Sent beacons to server.");
+            Serial.println("✅ Sent beacons to server.");
         }
-        return true;
     }
     else if (input == "reset")
     {
-        Serial.println("🔧 Received command: " + input);
+        Serial.println("🔧 Received command: reset");
+        delay(200);
         clearFiltersFromFlash();
         clearWifiCredentials();
-        SerialBT.println("🧹 Resetting device...");
+        Serial.println("🧹 Resetting device...");
         ESP.restart();
     }
-    return false;
+    else
+    {
+        Serial.println("❓ Unknown command: " + input);
+    }
 }
 
 void performBeaconScan()
@@ -70,13 +75,13 @@ void performBeaconScan()
 
     if (beacons.empty())
     {
-        SerialBT.println("❌ No beacons found.");
+        Serial.println("❌ No beacons found.");
     }
     else
     {
         for (const auto &b : beacons)
         {
-            SerialBT.println("MAC: " + String(b.mac.c_str()) + " RSSI: " + String(b.rssi));
+            Serial.println("MAC: " + String(b.mac.c_str()) + " RSSI: " + String(b.rssi));
         }
     }
 }
@@ -86,10 +91,11 @@ void sendFilteredBeacons()
     const auto &filtered = getFilteredBeaconList();
     if (filtered.empty())
     {
-        SerialBT.println("⚠️ No filtered beacons to send.");
+        Serial.println("⚠️ No filtered beacons to send.");
     }
     else
     {
         sendBeaconDataViaTCP(filtered);
+        Serial.println("✅ Filtered beacon data sent.");
     }
 }
