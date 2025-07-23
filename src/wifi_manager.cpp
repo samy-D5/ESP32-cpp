@@ -61,5 +61,5 @@ void handleInitialWifiSetup() {
 
     Serial.println("📶 No valid Wi-Fi. Waiting for Bluetooth input...");
     setWaitingForWifiInput(true);
-    handleBluetoothInput();
+    //handleBluetoothInput();
 }

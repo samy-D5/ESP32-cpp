@@ -6,8 +6,10 @@
 #include "bluetooth_handler.h"
 #include "cmd_processor.h"
 #include "state_controller.h"
+#include "filter_storage.h"
+#include <time.h>
+//#include "esp_wifi.h" // <-- Add this include for esp_wifi_set_ps
 
-// Forward declaration if not included from a header
 bool handleBluetoothInput();
 bool isWaitingForWifiInput();
 extern BluetoothSerial SerialBt;
@@ -16,54 +18,87 @@ void initBluetooth();
 void initBLEScanner();
 
 unsigned long lastScanTime = 0;
-const unsigned long scanInterval = 10000; // in milliseconds (10 sec)
+unsigned long lastSendTime = 0;
+const unsigned long scanInterval = 3000; // scan every 3s
+const unsigned long sendInterval = 10000; // send every 10s
 
-const int LED_PIN = 2;
 
 void setup() {
   Serial.begin(115200);
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  delay(200);
 
+  
+  WiFi.setSleep(true);  // Enable WiFi modem sleep (reduces interference)
   handleInitialWifiSetup();         // ✅ Connects or enables Bluetooth for credentials
+  //esp_wifi_set_ps(WIFI_PS_NONE);  // ✅ Improves BLE reliability
+  loadFiltersFromFlash();           // ✅ Load any saved filters
   initBluetooth();                  // ✅ Keep Bluetooth ON always
   initBLEScanner();                 // ✅ Ready to scan if Wi-Fi is connected
+  
+  setScanFlag();  // ✅ <--- Automatically start scanning
+  //setSendFlag();  // ✅ <--- Automatically prepare to send data
+  //setFilteringEnabled(true); // ✅ Enable filtering by default
+  configTime(19800, 0, "pool.ntp.org"); // set Timezone to IST (GMT+5:30)
+
+  // wait for time to be set
+    struct tm timeinfo; 
+    while (!getLocalTime(&timeinfo)) {
+        Serial.println("⏳ Waiting for NTP time...");
+        delay(500);
+    }
 }
 
 void loop() {
 
-  // ✅ All Bluetooth handling (SSID/pass or commands) inside this function
+  // ✅ Handle ALL Bluetooth input in one go
   if (SerialBT.available()) {
-    if (handleBluetoothInput()) {
-      Serial.println("🔵 Bluetooth input handled.");
-    } else {
-      Serial.println("❓ No Bluetooth input to handle.");
-    }
-    return;
-  }
-
-  // ✅ Optional: Only allow advanced commands if Wi-Fi credentials are done
-  if (!isWaitingForWifiInput() && SerialBT.available()) {
     String input = SerialBT.readStringUntil('\n');
     input.trim();
 
-    if (!processBluetoothCommand(input) && input.length() > 0) {
-      SerialBT.println("❓ Unknown command. Try VIEW, FILTER <mac>, DELETE <mac>, SEND, RESET");
+    if (isWaitingForWifiInput()) {
+      if (handleBluetoothInput(input)) {
+        Serial.println("🔵 Bluetooth input handled.");
+      } else {
+        Serial.println("❌ Invalid Bluetooth input.");
+      }
+    } else {
+      if (!processBluetoothCommand(input)) {
+        SerialBT.println("❓ Unknown command. Try view, register <mac>, delete <mac>, send, reset");
+      }
     }
+    return;  // Skip rest of loop until command fully processed
   }
 
   // ✅ Scan BLE and send data only if Wi-Fi is connected and not waiting
   if (shouldScanBeacons() && WiFi.status() == WL_CONNECTED) {
-    if (millis() - lastScanTime >= scanInterval) {
-      Serial.println("🔍 Scanning for beacons...");
-      scanForBeacons();
-
-      const auto& beacons = getCollectedBeacons();
-      if (!beacons.empty() && shouldSendBeacons()) {
-        sendBeaconDataViaTCP(beacons);
-      }
-
-      lastScanTime = millis();
+    unsigned long currentMillis = millis();
+     // Scan frequently (every 3 seconds)
+    if (currentMillis - lastScanTime >= scanInterval) {
+        Serial.println("🔍 Scanning for beacons...");
+        scanForBeacons();  // appends Teltonika beacons to collectedBeacons
+        lastScanTime = currentMillis;
     }
+    // Send accumulated data every 10 seconds
+    if (currentMillis - lastSendTime >= sendInterval) {
+      const auto& beacons = getCollectedBeacons();
+      if (!beacons.empty() && hasSendBeenTriggered()) {
+        Serial.println("✅ All Teltonika Beacons:");
+        for (const auto& b : beacons) {
+            Serial.println("MAC: " + String(b.mac.c_str()) + " RSSI: " + String(b.rssi));
+        }
+            const auto& filtered = getFilteredBeaconList();
+            if (!filtered.empty()) {
+                Serial.println("📤 Filtered Beacons:");
+                for (const auto &b : filtered) {
+                    Serial.println("MAC: " + String(b.mac.c_str()) + " RSSI: " + String(b.rssi));
+                }
+                sendBeaconDataViaTCP(filtered);
+              } else {
+                Serial.println("⚠️ No filtered beacons found.");
+              }
+              clearCollectedBeacons();
+              lastSendTime = currentMillis;
+          }
+       }
   }
 }

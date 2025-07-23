@@ -20,3 +20,23 @@ void setWaitingForWifiInput(bool waiting) {
 bool isWaitingForWifiInput() {
     return waitingForWifiInput;
 }
+
+static bool sendTriggered = false;
+
+bool hasSendBeenTriggered() {
+    return sendTriggered;
+}
+
+void setSendTriggered(bool val) {
+    sendTriggered = val;
+}
+
+bool isFilteringEnabled = false;
+
+void setFilteringEnabled(bool enabled) {
+    isFilteringEnabled = enabled;
+}
+
+bool getFilteringEnabled() {
+    return isFilteringEnabled;
+}

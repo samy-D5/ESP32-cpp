@@ -1,90 +1,107 @@
 #include "ble_scanner.h"
-#include  "filter_storage.h"
+#include "filter_storage.h"
+#include "state_controller.h"
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
 #include <map>
+#include <time.h>
 
-// === Constants ===
-#define SCAN_DURATION 5 // in seconds
+
+#define SCAN_DURATION 3  // in seconds
 #define TELTONIKA_COMPANY_ID 0x089A
 
-// === Globals ===
-static BLEScan* bleScanner = nullptr;
-static std::map<std::string, bool> seenBeacons;
+static BLEScan* pBLEScan = nullptr;
 static std::vector<BeaconData> collectedBeacons;
-static std::vector<String> macFilterList;
 
-// === Beacon Callback Class ===
-class BeaconScanCallback : public BLEAdvertisedDeviceCallbacks {
-public:
+String getCurrentTimeString() {
+    struct tm timeinfo;
+    if (getLocalTime(&timeinfo)) {
+        char timeStr[16];
+        sprintf(timeStr, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+        return String(timeStr);
+    }
+    return String("--:--:--");
+}
+
+
+class TeltonikaAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice) override {
-        std::string mac = advertisedDevice.getAddress().toString();
+        // Only process if manufacturer data is present
+        if (!advertisedDevice.haveManufacturerData()) return;
 
-        // Skip duplicates
-        if (seenBeacons.count(mac)) return;
+        std::string manufacturerData = advertisedDevice.getManufacturerData();
+        const uint8_t* data = (uint8_t*)manufacturerData.data();
+        size_t length = manufacturerData.length();
 
-        const uint8_t* payload = advertisedDevice.getPayload();
-        int length = advertisedDevice.getPayloadLength();
+        // Need at least 4 bytes: 2 for company ID, 2 for manufacturer data header
+        if (length < 4) return;
 
-        // Parse advertisement fields
-        int index = 0;
-        while (index < length) {
-            uint8_t fieldLen = payload[index];
-            if (fieldLen == 0 || index + fieldLen >= length) break;
+        // Extract company ID (little endian)
+        uint16_t companyId = (data[1] << 8) | data[0];
 
-            uint8_t adType = payload[index + 1];
-
-            // Check for manufacturer-specific data (0xFF)
-            if (adType == 0xFF && fieldLen >= 4) {
-                uint16_t companyId = payload[index + 3] << 8 | payload[index + 2];
-
-                if (companyId == TELTONIKA_COMPANY_ID) {
-                    seenBeacons[mac] = true;
-
-                    BeaconData beacon;
-                    beacon.mac = mac;
-                    beacon.rssi = advertisedDevice.getRSSI();
-                    beacon.rawPayload.assign(payload, payload + length);
-
-                    collectedBeacons.push_back(beacon);
-
-                    Serial.println("✅ Teltonika EYE Beacon Found!");
-                    Serial.printf("MAC: %s, RSSI: %d\n", mac.c_str(), beacon.rssi);
-                }
-                break;
+        // Check for Teltonika company ID
+        if (companyId == TELTONIKA_COMPANY_ID) {
+            std::string mac = advertisedDevice.getAddress().toString();
+            
+            BeaconData beacon;
+            beacon.mac = mac;
+            beacon.rssi = advertisedDevice.getRSSI();
+            beacon.rawPayload.assign(data, data + length);
+            
+            collectedBeacons.push_back(beacon);
+            
+            Serial.printf("[%s] ✅Teltonika Beacon Found: MAC: %s, RSSI: %d\n", 
+                         getCurrentTimeString().c_str(), mac.c_str(), beacon.rssi);
+            
+            // Print raw manufacturer data for debugging
+            Serial.print("Manufacturer Data: ");
+            for (size_t i = 0; i < length; i++) {
+                Serial.printf("%02X ", data[i]);
             }
-
-            index += fieldLen + 1;
+            Serial.println();
         }
     }
 };
 
-// === Initialization ===
 void initBLEScanner() {
     BLEDevice::init("");
-    bleScanner = BLEDevice::getScan();
-    bleScanner->setAdvertisedDeviceCallbacks(new BeaconScanCallback(), false);
-    bleScanner->setActiveScan(true);
-    bleScanner->setInterval(100);
-    bleScanner->setWindow(99);
+    BLEDevice::setPower(ESP_PWR_LVL_P9); // Max power
+
+    // Configure WiFi/BLE coexistence
+    esp_ble_scan_params_t scan_params = {
+        .scan_type = BLE_SCAN_TYPE_ACTIVE,
+        .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
+        .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
+        .scan_interval = 0x50,  // 50ms
+        .scan_window = 0x50      // 50ms
+    };
+    esp_ble_gap_set_scan_params(&scan_params);
+    
+    pBLEScan = BLEDevice::getScan();
+    pBLEScan->setAdvertisedDeviceCallbacks(new TeltonikaAdvertisedDeviceCallbacks());
+    pBLEScan->setActiveScan(true);
+    pBLEScan->setInterval(50);
+    pBLEScan->setWindow(50);
+   // pBLEScan->setDuplicateFilter(false); // Important for catching all advertisements
 }
 
-// === Start Scan ===
 void scanForBeacons() {
-    seenBeacons.clear();
     collectedBeacons.clear();
-
-    Serial.println("🔍 Starting BLE scan...");
-    BLEScanResults results = bleScanner->start(SCAN_DURATION, false);
-    Serial.printf("🔎 Scan complete. Devices found: %d\n", results.getCount());
-
-    bleScanner->clearResults();
-    bleScanner->stop();
+    
+    Serial.printf("[%s] Starting BLE scan...\n", getCurrentTimeString().c_str());
+    BLEScanResults results = pBLEScan->start(SCAN_DURATION, false);
+    Serial.printf("[%s] Scan complete. Devices found: %d, Teltonika beacons: %d\n", 
+                 getCurrentTimeString().c_str(), results.getCount(), collectedBeacons.size());
+    
+    pBLEScan->clearResults();
 }
 
-// === Accessor ===
 const std::vector<BeaconData>& getCollectedBeacons() {
     return collectedBeacons;
 }
 
+void clearCollectedBeacons() {
+    collectedBeacons.clear();
+}
