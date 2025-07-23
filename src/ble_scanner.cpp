@@ -9,7 +9,7 @@
 #include <time.h>
 
 
-#define SCAN_DURATION 3  // in seconds
+#define SCAN_DURATION 10  // in seconds
 #define TELTONIKA_COMPANY_ID 0x089A
 
 static BLEScan* pBLEScan = nullptr;
