@@ -19,7 +19,7 @@ void initBLEScanner();
 
 unsigned long lastScanTime = 0;
 unsigned long lastSendTime = 0;
-const unsigned long scanInterval = 3000; // scan every 3s
+//const unsigned long scanInterval = 3000; // scan every 3s
 const unsigned long sendInterval = 10000; // send every 10s
 
 
@@ -73,13 +73,13 @@ void loop() {
   if (shouldScanBeacons() && WiFi.status() == WL_CONNECTED) {
     unsigned long currentMillis = millis();
      // Scan frequently (every 3 seconds)
-    if (currentMillis - lastScanTime >= scanInterval) {
-        Serial.println("🔍 Scanning for beacons...");
-        scanForBeacons();  // appends Teltonika beacons to collectedBeacons
-        lastScanTime = currentMillis;
-    }
+    // if (currentMillis - lastScanTime >= scanInterval) {
+    //   lastScanTime = currentMillis;
+    // }
     // Send accumulated data every 10 seconds
     if (currentMillis - lastSendTime >= sendInterval) {
+      Serial.println("🔍 Scanning for beacons...");
+      scanForBeacons();  // appends Teltonika beacons to collectedBeacons
       const auto& beacons = getCollectedBeacons();
       if (!beacons.empty() && hasSendBeenTriggered()) {
         Serial.println("✅ All Teltonika Beacons:");
