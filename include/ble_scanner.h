@@ -15,5 +15,6 @@ struct BeaconData
 void initBLEScanner();
 void scanForBeacons();
 const std::vector<BeaconData> &getCollectedBeacons();
+void clearCollectedBeacons();
 
 #endif

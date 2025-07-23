@@ -8,7 +8,7 @@
 extern BluetoothSerial SerialBT;
 
 void initBluetooth();
-bool handleBluetoothInput();
+bool handleBluetoothInput(const String &input);
 bool isWaitingForWifiInput();
 
 #endif
