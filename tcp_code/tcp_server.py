@@ -1,4 +1,5 @@
 import socket
+from datetime import datetime
 
 HOST = '0.0.0.0'  # Accept from any IP
 PORT = 5000       # Must match SERVER_PORT on ESP32
@@ -20,7 +21,7 @@ def start_server():
                     if not data:
                         print("🔌 Client disconnected.")
                         break
-                    print(f"📥 Received: {data.decode().strip()}")
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 📥 Received: {data.decode().strip()}")                    
 
 if __name__ == "__main__":
     start_server()
