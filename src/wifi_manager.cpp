@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include "state_controller.h"
 #include "bluetooth_handler.h"
+#include <ESP32Ping.h>
 
 Preferences pref;
 
@@ -27,6 +28,12 @@ void clearWifiCredentials() {
     pref.end();
 }
 
+bool isInternetAvailable() {
+    if (WiFi.status() != WL_CONNECTED) return false;
+    // pinging Google's DNS server
+    return Ping.ping("8.8.8.8", 3);  // 3 attempts
+}
+
 bool connectToWifi(const String &ssid, const String &password) {
     WiFi.begin(ssid.c_str(), password.c_str());
     Serial.print("Connecting to Wi-Fi");
@@ -42,7 +49,17 @@ bool connectToWifi(const String &ssid, const String &password) {
         Serial.println("Connected to WIFI");
         Serial.print("IP Address: ");
         Serial.println(WiFi.localIP());
-        return true;
+         // check internet access via ping
+        if (isInternetAvailable()) {
+            Serial.println("🌐 Internet is available.");
+            return true;
+        } else {
+            Serial.println("🚫 Wi-Fi connected, but NO internet access.");
+            WiFi.disconnect();  // disconnect if internet isn't available
+            clearWifiCredentials(); // clear saved credentials
+            Serial.println("❌ Cleared saved Wi-Fi credentials due to no internet access.");
+            return false;
+        }
     }else {
         Serial.println("Failed to connect to WIFI");
         return false;
