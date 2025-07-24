@@ -1,11 +1,10 @@
 #include "tcp_client.h"
 #include <WiFi.h>
 
-const char *SERVER_IP = "192.168.0.115";
+const char *SERVER_IP = "192.168.0.118";
 const uint16_t SERVER_PORT = 5000;
 
-void sendBeaconDataViaTCP(const std::vector<BeaconData> &beacons)
-{
+void sendBeaconDataViaTCP(const std::vector<BeaconData> &beacons){
     if (WiFi.status() != WL_CONNECTED){
         Serial.println("❌ Not connected to Wi-Fi");
         return;
