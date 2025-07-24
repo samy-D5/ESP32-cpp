@@ -9,7 +9,6 @@
 #include <time.h>
 
 
-#define SCAN_DURATION 10  // in seconds
 #define TELTONIKA_COMPANY_ID 0x089A
 
 static BLEScan* pBLEScan = nullptr;
@@ -24,7 +23,6 @@ String getCurrentTimeString() {
     }
     return String("--:--:--");
 }
-
 
 class TeltonikaAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice) override {
