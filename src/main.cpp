@@ -17,16 +17,13 @@ void performBeaconScan();
 void initBluetooth();
 void initBLEScanner();
 
-unsigned long lastScanTime = 0;
+// varibales
 unsigned long lastSendTime = 0;
-//const unsigned long scanInterval = 3000; // scan every 3s
-const unsigned long sendInterval = 10000; // send every 10s
 
 
 void setup() {
   Serial.begin(115200);
   delay(200);
-
   
   WiFi.setSleep(true);  // Enable WiFi modem sleep (reduces interference)
   handleInitialWifiSetup();         // ✅ Connects or enables Bluetooth for credentials
@@ -72,12 +69,9 @@ void loop() {
   // ✅ Scan BLE and send data only if Wi-Fi is connected and not waiting
   if (shouldScanBeacons() && WiFi.status() == WL_CONNECTED) {
     unsigned long currentMillis = millis();
-     // Scan frequently (every 3 seconds)
-    // if (currentMillis - lastScanTime >= scanInterval) {
-    //   lastScanTime = currentMillis;
-    // }
+    
     // Send accumulated data every 10 seconds
-    if (currentMillis - lastSendTime >= sendInterval) {
+    if (currentMillis - lastSendTime >= SEND_INTERVAL) {
       Serial.println("🔍 Scanning for beacons...");
       scanForBeacons();  // appends Teltonika beacons to collectedBeacons
       const auto& beacons = getCollectedBeacons();
