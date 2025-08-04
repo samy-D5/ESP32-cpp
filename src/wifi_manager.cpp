@@ -56,8 +56,8 @@ bool connectToWifi(const String &ssid, const String &password) {
         } else {
             Serial.println("🚫 Wi-Fi connected, but NO internet access.");
             WiFi.disconnect();  // disconnect if internet isn't available
-            clearWifiCredentials(); // clear saved credentials
-            Serial.println("❌ Cleared saved Wi-Fi credentials due to no internet access.");
+            //clearWifiCredentials(); // clear saved credentials
+           // Serial.println("❌ Cleared saved Wi-Fi credentials due to no internet access.");
             return false;
         }
     }else {
@@ -78,5 +78,14 @@ void handleInitialWifiSetup() {
 
     Serial.println("📶 No valid Wi-Fi. Waiting for Bluetooth input...");
     setWaitingForWifiInput(true);
-    //handleBluetoothInput();
+    initBluetooth();
+
+     while (isWaitingForWifiInput()) {
+        if (SerialBT.available()) {
+            String input = SerialBT.readStringUntil('\n');
+            input.trim();
+            handleBluetoothInput(input);
+        }
+        delay(500);
+    }
 }
